@@ -1,18 +1,22 @@
-src=$(wildcard ./*.cpp)
-obj=$(patsubst ./%.cpp, ./%.o, $(src))
+src=$(wildcard ./Source/*.cpp)
+obj=$(patsubst ./Source/%.cpp, ./Build/%.o, $(src))
 args= -Wall -g
-
+Build= ./Build/
+Include= ./Build/
+Source= ./Source/
 ALL:main
 clean:$(obj)
 	-rm -rf $(obj)
 
-main:main.o mevent.o
-	g++ -o main main.o mevent.o
+main:$(Build)main.o $(Build)mevent.o
+	g++ -o main $(Build)main.o $(Build)mevent.o
 
-main.o:main.cpp
-	g++ -c main.cpp
+$(Build)main.o:$(Source)main.cpp
+	g++ -o $(Build)main.o -c $(Source)main.cpp
 
-mevent.o:mevent.cpp
-	g++ -c mevent.cpp
+$(Build)mevent.o:$(Source)mevent.cpp
+	g++ -o $(Build)mevent.o -c $(Source)mevent.cpp
 
+dbutil:$(Source)dbutil.cpp
+	g++ -o $(Build)dbutil.o -c $(Source)dbutil.cpp
 .PHONY:clean All

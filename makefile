@@ -18,5 +18,5 @@ $(Build)mevent.o:$(Source)mevent.cpp
 	g++ -o $(Build)mevent.o -c $(Source)mevent.cpp
 
 dbutil:$(Source)dbutil.cpp
-	g++ -o $(Build)dbutil.o -c $(Source)dbutil.cpp
+	g++ -o dbutil $(Source)dbutil.cpp -l mysqlclient
 .PHONY:clean All

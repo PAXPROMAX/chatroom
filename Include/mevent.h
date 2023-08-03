@@ -1,9 +1,11 @@
 #ifndef SERVPORT
     #define SERVPORT 9690
+    extern int servport;
 #endif
 
 #ifndef BUF_MAXSIZE
     #define BUF_MAXSIZE 4096
+    extern int buf_maxsize;
 #endif
 
 #ifndef EVENT_SIZE 

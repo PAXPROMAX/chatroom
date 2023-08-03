@@ -63,7 +63,6 @@ bool Dbutil::user_login_verify(const char* name, const char* password)
     unsigned int fields, rows;
     char buf[4096];
     sprintf(buf, "select * from %s where name = '%s' and password = '%s';", this->table, name, password);
-    printf("%s\n", buf);
     if(mysql_query(mysql, buf) != 0)//执行查询语句
     { 
         printf("user login err: %s\n", buf);
@@ -97,7 +96,7 @@ bool Dbutil::user_register(const char *name, const char *password)
     MYSQL_ROW row;
     unsigned int fields, rows;
     char buf[4096];
-    sprintf(buf, "select * from %s where name = '%s' and password = '%s';", this->table, name, password);
+    sprintf(buf, "insert into %s(name, password) values('%s', '%s');", this->table, name, password);
     printf("%s\n", buf);
     if(mysql_query(mysql, buf) != 0)//执行查询语句
     { 
@@ -109,7 +108,7 @@ bool Dbutil::user_register(const char *name, const char *password)
     if(rows == 1)
     {
         row = mysql_fetch_row(result);
-        printf("user create success: %s, password: %s", name, password);
+        printf("user create success: name: %s, password: %s", name, password);
         mysql_free_result(result);//释放结果集所占内存
         return true;
     }
@@ -119,7 +118,7 @@ bool Dbutil::user_register(const char *name, const char *password)
     }
     else
     {
-        printf("user create fail: %s, %s\n", name, password);
+        printf("user create fail: name: %s, password: %s\n", name, password);
     }
     /**/
     mysql_free_result(result);//释放结果集所占内存
@@ -149,6 +148,7 @@ int main(int argc, char *argv[])
     cin >> password;
     Dbutil* util = new Dbutil(str[0], str[1], str[2], str[3], atoi(str[4]), NULL, 0, str[5]);
     util->user_login_verify(name, password);
+    util->user_register(name, password);
     delete util;
     close(fd);
     return 0;

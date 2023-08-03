@@ -1,5 +1,5 @@
 # chatroom
     Ubuntu x64
-    C++ chat online finish
+    C++ chat online Done
     mysql doing
     login doing

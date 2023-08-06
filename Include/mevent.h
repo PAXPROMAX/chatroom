@@ -50,12 +50,15 @@
 
 struct event
 {
-	int fd;		//fd
-	int num;	//use?
-	char buf[BUF_MAXSIZE]; //buf
-	void(*func)(void* arg);	//cb
-	void* arg;	//arg
-    int status;
+	int fd;		//文件描述符
+	int num;	//buf中的字节数
+
+    
+	char buf[BUF_MAXSIZE]; //用于接收数据
+	void(*func)(void* arg);	//回调函数, 设置为epoll_read_cb
+
+	void* arg;	//其他额外参数, 设置为指向epoll文件描述符的地址
+    int status; //是否登录, 1为登录, 0为离线
 };
 
 extern struct event ev[EVENT_SIZE + 1];
@@ -69,6 +72,6 @@ void event_sig(int sig);
 void event_read_cb(void* arg);
 void event_write_cb(void *arg);
 void event_listen_cb(void* args);
-void eventset(struct event* ev, int fd, void(*func)(void* args),void* arg, int* epfd);
+void eventset(struct event* ev, int fd, void(*func)(void* arg),void* arg, int* epfd);
 void eventdel(struct event* ev);
 void init_sock_bind(int *epfd, int num);

@@ -13,10 +13,10 @@ clean:$(obj)
 main:$(Build)main.o $(Build)mevent.o $(Build)dbutil.o $(Build)threadpool.o
 	g++ -o $@ $^ $(-l)
 
-client:$(Source)client.cpp
-	g++ $(inc) -o client $(Source)client.cpp
+client:$(Build)client.o
+	g++ $(inc) -o $@ $<
 
-$(Include)%.o:$(Source)%.cpp
-	g++ $(inc) -o $@ $< $(-l)
+$(Build)%.o:$(Source)%.cpp
+	g++ $(inc) -c -o $@ $< $(-l)
 
 .PHONY: clean

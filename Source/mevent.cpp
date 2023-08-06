@@ -21,12 +21,12 @@ void init_event(struct event* ev, int num)
 	}
 }
 
-/* 线程池中的线程处理业务 */
+
 void *process(void *arg)
 {
 	struct event* ev;
 	ev = (struct event*)arg;
-    printf("thread %u working on %d task\n ",(unsigned int)pthread_self(),ev->fd);
+    printf("thread %u working on %d task\n",(unsigned int)pthread_self(),ev->fd);
 	ev->func((void*)ev);
     printf("task %u is end\n", ev->fd);
 
@@ -51,12 +51,13 @@ void set_nonblock(int fd)
 		error_exit("file control set fail: ");
 	};
 }
-//for signal quit and interrupt
+
 void event_sig(int sig)
 {
-	fprintf(stdout, "detected quit or interrupt signal, shutdown in 3 seconds\n");
+	fprintf(stdout, "detected quit or interrupt signal, server shutdown\n");
 	int i = 0;
 	int* epfd = (int*)ev[EVENT_SIZE].arg;
+	threadpool_destroy(thp);
 	for(i = 0; i < EVENT_SIZE; i++)
 	{
 		if(ev[i].fd != -1)
@@ -69,7 +70,6 @@ void event_sig(int sig)
 	epoll_ctl(*epfd, EPOLL_CTL_DEL, ev[i].fd, NULL);
 	close(ev[i].fd);
 	close(*epfd);
-	threadpool_destroy(thp);
 	fprintf(stdout, "shutdown complete\n");
 	exit(0);
 }
@@ -83,7 +83,7 @@ void event_read_cb(void* arg)
 	rev->num = 0;
 	while(1)
 	{
-		rev->num = recv(rev->fd, &rev->buf[rev->num], BUF_MAXSIZE, 0);
+		rev->num = recv(rev->fd, &rev->buf[rev->num], BUF_MAXSIZE - rev->num, 0);
 		if(rev->num > 0)
 		{
 			continue;
@@ -99,30 +99,25 @@ void event_read_cb(void* arg)
 		}
 		else	error_exit("read error: ");
 	}
-/*
-	for(i = 0; i < rev->num; i++)
-	{
-		rev->buf[i] = toupper(rev->buf[i]);
-	}
-	//TODO: del send for itself can't get message
-	send(rev->fd, rev->buf, rev->num, 0);
-*/
-	event_write_cb(arg);
+
+	event_write(arg);
 	return;
 }
 
-void event_write_cb(void *arg)
+void event_write(void *arg)
 {
+	printf("write cb\n");
 	struct event* wev;
 	int i, *epfd;
 	wev = (struct event*)arg;
+	wev->num = strlen(wev->buf);
 	if(wev->status == 1)
 	{
 		if(strcmp(wev->buf, "./exit") != 0)
 		{
 			for(i = 0; i < EVENT_SIZE; i++)
 			{
-				if(wev->fd == ev[i].fd || ev[i].status == 0)	//itself or offline can't get message
+				if(wev->fd == ev[i].fd || ev[i].status == 0)
 				{
 					continue;
 				}
@@ -249,21 +244,20 @@ void init_sock_bind(int *epfd, int num)
 	struct sockaddr_in servaddr;
 	int listenfd, set;
 
-	//init sockaddr_in
+	// 初始化 sockaddr_in
 	servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 	servaddr.sin_family = AF_INET;
 	servaddr.sin_port = htons(SERVPORT);
 
 
-	//init listenfd
+	// 初始化 listenfd
 	listenfd = socket(AF_INET, SOCK_STREAM, 0);
 	if(listenfd == -1)	error_exit("socket create fail: ");
 
-	//ET for listenfd
 
-	set_nonblock(listenfd);
+	set_nonblock(listenfd);	/*设置listenfd为NONBLOCK模式*/
 
-	//listenfd reuse port
+	//设置端口复用
 	int opt = 1;
 	if(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt) == -1)	error_exit("setsockopt error");
 
@@ -276,6 +270,6 @@ void init_sock_bind(int *epfd, int num)
 		error_exit("listen fail: ");
 	}
 
-	//init event[1024](listenfd event)
+
 	eventset(&ev[EVENT_SIZE], listenfd, event_listen_cb, (void*)epfd, epfd);
 }

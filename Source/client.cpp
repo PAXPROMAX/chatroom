@@ -7,9 +7,9 @@
 #include<string.h>
 #include<fcntl.h>
 #include<errno.h>
-#include"../Include/userctrl.h"
 #define SERVIP "127.0.0.1"
-
+#define BUF_MAXSIZE 4096
+#define SERVPORT 9690
 char ctrl;
 void error_exit(const char* err)
 {
@@ -108,13 +108,8 @@ void user_exit(int fd)
     printf("user exit\n");
     exit(0);
 }
-/*TODO:
-    1. 给服务器端设置处理前缀的函数
-    2. 把客户端的内容成功发送到服务器
-    3. 服务器广播数据
-    4. 设置MYSQL登录
-    5. 设置登录状态
-*/
+
+
 void* pthread_write(void* arg)
 {
     int fd = *(int*)arg;
@@ -135,12 +130,7 @@ void* pthread_write(void* arg)
             num = 0;
             memset(buf, 0,sizeof(buf));
             printf("set complete\n");
-            while(time > 0 && num == 0)
-            {
-                time--;
-                usleep(500000);
-                num = recv(fd, buf, BUF_MAXSIZE, 0);
-            }
+            num = recv(fd, buf, BUF_MAXSIZE, 0);
             fprintf(stdout, "strcmp: %d, buf: %s\n",strcmp(buf, "login success"), buf);
             if(strcmp(buf, "login success") == 0)
             {
@@ -200,31 +190,25 @@ int main(int argc, char *argv[])
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(SERVPORT);
     fd = socket(AF_INET, SOCK_STREAM, 0);
-	set = fcntl(fd, F_GETFD);
-	set |= O_NONBLOCK;
-	if(fcntl(fd, F_SETFD, set) == -1)
-	{
-		error_exit("set file control fail: ");
-	}
     if(fd == -1) error_exit("socket create fail: ");
     if(connect(fd, (struct sockaddr*)&servaddr, sizeof(servaddr)) == -1) error_exit("connect fail: ");
 
     pthread_create(&tid, NULL, pthread_write, &fd);
     pthread_detach(tid);
 
-    int s = 1;
     while (1)
     {
         if(ctrl == '9')
         {
             memset(buf, 0, sizeof(buf));
-            s = 0;
+            num = 0;
             do
             {
                 num = recv(fd, buf, BUF_MAXSIZE, MSG_DONTWAIT);
                 if(num > 0)
                 {
                     printf(">>>%s\n", buf);
+                    printf("num = %d\n", num);
                     continue;
                 }
             }
@@ -235,10 +219,10 @@ int main(int argc, char *argv[])
                 close(fd);
                 exit(0);
             }
-            else 
+            else if(num == -1)
             {
                 if(errno == EAGAIN) continue;
-                error_exit("read fail: ");
+                else error_exit("read fail: ");
             }
         }
     }    

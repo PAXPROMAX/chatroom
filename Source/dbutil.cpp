@@ -2,15 +2,13 @@
 
 
 
-/*
- 函数说明：对字符串中所有指定的子串进行替换
- 参数：
-string resource_str            //源字符串
-string sub_str                //被替换子串
-string new_str                //替换子串
-返回值: string
+/**
+ * @brief 替换所有字符串
+ * @param resource_str          源字符串
+ * @param sub_str               需要替换的字符串
+ * @param new_str               用于替换的字符串
+ * @return  std::string 目标字符串
  */
-
 std::string strreplace(std::string resource_str, std::string sub_str, std::string new_str)
 {
     std::string dst_str = resource_str;
@@ -24,11 +22,10 @@ std::string strreplace(std::string resource_str, std::string sub_str, std::strin
 }
 
 
-/*
- 函数说明：重新设置关于SQL的转义字符
- 参数：
-str            //源字符串
-返回值: string
+/**
+ * @brief 重新设置关于SQL的转义字符
+ * @param str           源字符串
+ * @return string 目标字符串
  */
 std::string reset_ESC(const char* str)
 {
@@ -168,18 +165,3 @@ bool Dbutil::user_register(const char *name, const char *password)
     mysql_free_result(result);//释放结果集所占内存
     return false;
 }
-/*  test for class*/
-/*
-using namespace std;
-int main(int argc, char *argv[])
-{
-    char name[256], password[256];
-    cin >> name;
-    cin >> password;
-    Dbutil* util = new Dbutil(NULL, 0);
-    util->user_login_verify(name, password);
-    util->user_register(name, password);
-    delete util;
-    return 0;
-}
-*/

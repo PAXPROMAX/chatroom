@@ -22,6 +22,7 @@ int main(int argc, char* argv[])
 			if(events[i].events & EPOLLIN)
 			{
 				e = (struct event*)events[i].data.ptr;
+				//e->func((void*)e);
 				threadpool_add(thp, process, (void*)e);
 			}
 		}

@@ -1,53 +1,48 @@
-#ifndef SERVPORT
-    #define SERVPORT 9690
-    extern int servport;
-#endif
+#define _mevent_h
 
-#ifndef BUF_MAXSIZE
-    #define BUF_MAXSIZE 4096
-    extern int buf_maxsize;
+#ifndef _netset_h
+    #include "netset.h"
 #endif
 
 #ifndef EVENT_SIZE 
     #define EVENT_SIZE 1024
 #endif
 
-#ifndef _sys_epoll_h_
+#ifndef _SYS_EPOLL_H
     #include<sys/epoll.h>
 #endif
 
-#ifndef _unistd_h_
+#ifndef _UNISTD_H
     #include<unistd.h>
 #endif
 
-#ifndef _arpa_inet_h_
+#ifndef _ARPA_INET_H
     #include<arpa/inet.h>
 #endif
 
-#ifndef _ctype_h_
+#ifndef _CTYPE_H
     #include<ctype.h>
 #endif
 
-#ifndef _stdio_h_
+#ifndef _STDIO_H
     #include<stdio.h>
 #endif
 
-#ifndef _fcntl_h_
+#ifndef _FCNTL_H
     #include<fcntl.h>
 #endif
 
-#ifndef _stdlib_h_
+#ifndef _STDLIB_H
     #include<stdlib.h>
 #endif
 
-#ifndef _string_h_
+#ifndef _STRING_H
     #include<string.h>
 #endif
 
-#ifndef _signal_h_
+#ifndef _SIGNAL_H
     #include<signal.h>
 #endif
-
 
 struct event
 {
@@ -56,6 +51,7 @@ struct event
 	char buf[BUF_MAXSIZE]; //buf
 	void(*func)(struct event* ev, void* args);	//cb
 	void* arg;	//arg
+    int status;
 };
 
 extern struct event ev[EVENT_SIZE + 1];

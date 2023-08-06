@@ -4,7 +4,8 @@
     C++/MYSQL/SOCKET/EPOLL
     C++ chat online Done
     mysql DONE
-    login doing
+    login DONE
     client wait
+    thread pool wait
 服务器支持端口复用, 但是在本地测试时可能会出现客户端占用端口或者服务器关闭但是客户端尝试重连的情况
 出现以上情况, 请用终端将端口相关的进程关闭.

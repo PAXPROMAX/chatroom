@@ -1,46 +1,85 @@
-#include<iostream>
-#include<mysql/mysql.h>
-#include<cstdio>
-#include<sys/stat.h>
-#include<sys/file.h>
-#include<unistd.h>
-#include<cstring>
-#define SQLCONFIGLINE 6
-using namespace std;
+#include"../Include/dbutil.h"
 
-class Dbutil
+
+
+/*
+ 函数说明：对字符串中所有指定的子串进行替换
+ 参数：
+string resource_str            //源字符串
+string sub_str                //被替换子串
+string new_str                //替换子串
+返回值: string
+ */
+
+std::string strreplace(std::string resource_str, std::string sub_str, std::string new_str)
 {
-private:
-    MYSQL* mysql;
-    const char* db;
-    const char *host; 
-    const char *user;
-    const char *passwd; 
-    unsigned int port;
-    const char *unix_socket;
-    unsigned long clientflag;
-    const char* table;
-    
-public:
-    Dbutil(const char *host, const char *user, const char *passwd, 
-    const char *db, unsigned int port, const char *unix_socket, unsigned long clientflag, const char*table);
-    ~Dbutil();
-    bool user_login_verify(const char* name, const char* password);
-    bool user_register(const char* name, const char* password);
-};
+    std::string dst_str = resource_str;
+    std::string::size_type pos = 0;
+    while((pos = dst_str.find(sub_str, pos)) != std::string::npos)   //替换所有指定子串
+    {
+        dst_str.replace(pos, sub_str.length(), new_str);
+        pos += new_str.length();
+    }
+    return dst_str;
+}
 
 
-Dbutil::Dbutil(const char *host, const char *user, const char *passwd, 
-    const char *db, unsigned int port, const char *unix_socket, unsigned long clientflag, const char* table) : host(host), user(user), passwd(passwd),
-    db(db), port(port), unix_socket(unix_socket), clientflag(clientflag), table(table)
+/*
+ 函数说明：重新设置关于SQL的转义字符
+ 参数：
+str            //源字符串
+返回值: string
+ */
+std::string reset_ESC(const char* str)
 {
+    std::string reset_str = str;
+    reset_str = strreplace(reset_str, "'", "''");
+    reset_str = strreplace(reset_str, "\\", "\\\\");
+    return reset_str;
+}
+
+
+
+
+Dbutil::Dbutil(const char *unix_socket, unsigned long clientflag)
+{
+    char buf[4096], *str[SQLCONFIGLINE];
+    int fd, i, num;
+    fd = open("./sqlconfig", O_RDONLY | O_NONBLOCK, 0666);
+    if(fd == -1){
+        printf("open file fail: ");
+    }
+    num = read(fd, buf, 4096);
+    i = 0;
+
+    /*
+        str[0] : host
+        str[1] : user
+        str[2] : password
+        str[3] : database
+        atoi(str[4]) : port
+        str[5] : table
+    */
+    str[0] = strtok(buf, "\n");
+    for(i = 1; i < SQLCONFIGLINE; i++)
+    {
+        str[i] = strtok(NULL, "\n");
+    }
+    for(i = 0; i < SQLCONFIGLINE; i++)
+    {
+        strtok(str[i], "=");
+        str[i] = strtok(NULL, "\0");
+    }
+    close(fd);
+
+    strcpy(table, str[5]);
     //mysql = mysql_real_connect(mysql, "localhost", "root", "cctv7355608", "test", 3306, NULL, 0);
     this->mysql = mysql_init(NULL);
     if(this->mysql == NULL)
     {
         printf("mysql init fail: ");
     }
-    this->mysql = mysql_real_connect(mysql, host, user, passwd, db, port, unix_socket, clientflag);
+    this->mysql = mysql_real_connect(mysql, str[0], str[1], str[2], str[3], atoi(str[4]), unix_socket, clientflag);
     if(this->mysql == NULL)
     {
         printf("mysql connect fail: ");
@@ -58,11 +97,18 @@ Dbutil::~Dbutil()
 
 bool Dbutil::user_login_verify(const char* name, const char* password)
 {
+    using namespace std;
     MYSQL_RES *result;
     MYSQL_ROW row;
     unsigned int fields, rows;
     char buf[4096];
-    sprintf(buf, "select * from %s where name = '%s' and password = '%s';", this->table, name, password);
+    string reset_name;
+    string reset_password;
+
+
+    reset_name = reset_ESC(name);
+    reset_password = reset_ESC(password);
+    sprintf(buf, "select * from %s where name = '%s' and password = '%s';", this->table, reset_name.c_str(), reset_password.c_str());
     if(mysql_query(mysql, buf) != 0)//执行查询语句
     { 
         printf("user login err: %s\n", buf);
@@ -73,7 +119,7 @@ bool Dbutil::user_login_verify(const char* name, const char* password)
     if(rows == 1)
     {
         row = mysql_fetch_row(result);
-        printf("user login success: %s, password: %s, access: %s\n", row[0], row[1], password);
+        printf("user login success: id: %s, password: %s, access: %s\n", row[0], row[1], reset_password.c_str());
         mysql_free_result(result);//释放结果集所占内存
         return true;
     }
@@ -83,73 +129,57 @@ bool Dbutil::user_login_verify(const char* name, const char* password)
     }
     else
     {
-        printf("user login fail: %s, %s\n", name, password);
+        printf("user login fail: name: %s, password: %s\n", reset_name.c_str(), reset_password.c_str());
     }
-    /**/
     mysql_free_result(result);//释放结果集所占内存
-   return false;
+    return false;
 }
 
 bool Dbutil::user_register(const char *name, const char *password)
 {
+    using namespace std;
     MYSQL_RES *result;
     MYSQL_ROW row;
     unsigned int fields, rows;
     char buf[4096];
-    sprintf(buf, "insert into %s(name, password) values('%s', '%s');", this->table, name, password);
-    printf("%s\n", buf);
+    string reset_name;
+    string reset_password;
+
+
+    reset_name = reset_ESC(name);
+    reset_password = reset_ESC(password);
+    sprintf(buf, "insert into %s(name, password) values('%s', '%s');", this->table, reset_name.c_str(), reset_password.c_str());
     if(mysql_query(mysql, buf) != 0)//执行查询语句
     { 
         printf("user create err: %s\n", buf);
         return false;
     }
     result = mysql_store_result(mysql);//获取结果集
-    rows = mysql_num_rows(result);//获取结果集的行数
-    if(rows == 1)
+    if(result == NULL)
     {
-        row = mysql_fetch_row(result);
-        printf("user create success: name: %s, password: %s", name, password);
+        printf("user create success: name: %s, password: %s", reset_name.c_str(), reset_password.c_str());
         mysql_free_result(result);//释放结果集所占内存
         return true;
     }
-    else if(rows != 0)
-    {
-        printf("something wrong in sql\n");
-    }
     else
     {
-        printf("user create fail: name: %s, password: %s\n", name, password);
+        printf("user create err: name: %s, password: %s\n -sql: %s\n", reset_name.c_str(), reset_password.c_str(), buf);
     }
-    /**/
     mysql_free_result(result);//释放结果集所占内存
-   return false;
+    return false;
 }
+/*  test for class*/
+/*
+using namespace std;
 int main(int argc, char *argv[])
 {
-    char buf[4096], *str[SQLCONFIGLINE], name[256], password[256];
-    int fd, i, num;
-    fd = open("./sqlconfig", O_RDONLY | O_NONBLOCK, 0666);
-    if(fd == -1){
-        printf("open file fail: ");
-    }
-    num = read(fd, buf, 4096);
-    i = 0;
-    str[0] = strtok(buf, "\n");
-    for(i = 1; i < SQLCONFIGLINE; i++)
-    {
-        str[i] = strtok(NULL, "\n");
-    }
-    for(i = 0; i < SQLCONFIGLINE; i++)
-    {
-        strtok(str[i], "=");
-        str[i] = strtok(NULL, "\0");
-    }
+    char name[256], password[256];
     cin >> name;
     cin >> password;
-    Dbutil* util = new Dbutil(str[0], str[1], str[2], str[3], atoi(str[4]), NULL, 0, str[5]);
+    Dbutil* util = new Dbutil(NULL, 0);
     util->user_login_verify(name, password);
     util->user_register(name, password);
     delete util;
-    close(fd);
     return 0;
 }
+*/

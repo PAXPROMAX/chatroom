@@ -1,5 +1,5 @@
 #include"../Include/mevent.h"
-
+#include"../Include/dbutil.h"
 struct event ev[EVENT_SIZE + 1];
 void error_exit(const char* err)
 {
@@ -15,6 +15,7 @@ void init_event(struct event* ev, int num)
 		ev[i].func = NULL;
 		ev[i].arg = NULL;
 		ev[i].num = 0;
+		ev[i].status = 0;
 	}
 }
 
@@ -44,13 +45,16 @@ void event_sig(int sig)
 void event_read_cb(struct event* rev, void* args)
 {
 	int i;
+	memset(rev->buf, 0, sizeof(rev->buf));
 	rev->num = recv(rev->fd, rev->buf, BUF_MAXSIZE, 0);
+/*
 	for(i = 0; i < rev->num; i++)
 	{
 		rev->buf[i] = toupper(rev->buf[i]);
 	}
-	//TODO: del send
+	//TODO: del send for itself can't get message
 	send(rev->fd, rev->buf, rev->num, 0);
+*/
 	event_write_cb(rev, args);
 	return;
 }
@@ -58,13 +62,66 @@ void event_read_cb(struct event* rev, void* args)
 void event_write_cb(struct event* wev, void *args)
 {
 	int i;
-	for(i = 0; i < EVENT_SIZE; i++)
+	if(wev->status == 1)
 	{
-		if(wev->fd == ev[i].fd || ev[i].fd == -1)
+		if(strcmp(wev->buf, "./exit") != 0)
 		{
-			continue;
+			for(i = 0; i < EVENT_SIZE; i++)
+			{
+				if(wev->fd == ev[i].fd || ev[i].status == 0)	//itself or offline can't get message
+				{
+					continue;
+				}
+				send(ev[i].fd, wev->buf, wev->num, 0);
+			}
 		}
-		send(ev[i].fd, wev->buf, wev->num, 0);
+		else
+		{
+			wev->status = 0;
+		}
+	}
+	else
+	{
+		char* ctrl;
+		char* name;
+		char* password;
+		ctrl = strtok(wev->buf, "=");
+		name = strtok(NULL, "=");
+		password = strtok(NULL, "\0");
+		if(*ctrl == '1')
+		{
+			Dbutil* util = new Dbutil(NULL, 0);
+			if(util->user_login_verify(name, password) == 1)
+			{
+				send(wev->fd, "login success", sizeof("login success"), 0);
+				wev->status = 1;
+			}
+			else
+			{
+				send(wev->fd, "login fail", sizeof("login fail"), 0);
+			}
+			delete util;
+		}
+
+		//wait for test
+		else if(*ctrl == '2')
+		{
+			Dbutil* util = new Dbutil(NULL, 0);
+			if(util->user_register(name, password) == 1)
+			{
+				send(wev->fd, "register success", sizeof("register success"), 0);
+			}
+			else
+			{
+				send(wev->fd, "register fail", sizeof("register fail"), 0);
+			}
+			delete util;
+		}
+		else if(*ctrl == '0')
+		{
+			wev->status = 0;
+			eventdel(wev);
+		}
 	}
 	return;
 }
@@ -114,10 +171,12 @@ void eventset(struct event* ev, int fd, void(*func)(struct event* ev, void* args
 //del an event
 void eventdel(struct event* ev)
 {
+	close(ev->fd);
 	ev->fd = -1;
 	ev->func = NULL;
 	ev->arg = NULL;
 	ev->num = 0;
+	ev->status = 0;
 }
 
 void init_sock_bind(int *epfd, int num)

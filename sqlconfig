@@ -1,0 +1,6 @@
+host=localhost
+user=root
+password=cctv7355608
+db=test
+port=3306
+table=users

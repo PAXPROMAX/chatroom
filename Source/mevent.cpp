@@ -1,6 +1,8 @@
 #include"../Include/mevent.h"
 #include"../Include/dbutil.h"
 struct event ev[EVENT_SIZE + 1];
+
+struct threadpool_t *thp;
 void error_exit(const char* err)
 {
 	perror(err);
@@ -19,7 +21,36 @@ void init_event(struct event* ev, int num)
 	}
 }
 
+/* 线程池中的线程处理业务 */
+void *process(void *arg)
+{
+	struct event* ev;
+	ev = (struct event*)arg;
+    printf("thread %u working on %d task\n ",(unsigned int)pthread_self(),ev->fd);
+	ev->func((void*)ev);
+    printf("task %u is end\n", ev->fd);
 
+    return NULL;
+}
+
+void reset_epolloneshot(int epfd, struct event* ev)
+{
+    epoll_event event;
+    event.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
+    event.data.ptr = ev;
+    epoll_ctl(epfd, EPOLL_CTL_MOD, ev->fd, &event);
+}
+
+void set_nonblock(int fd)
+{
+	int set;
+	set = fcntl(fd, F_GETFL, 0);
+	set |= O_NONBLOCK;
+	if(fcntl(fd, F_SETFL, set) == -1)
+	{
+		error_exit("file control set fail: ");
+	};
+}
 //for signal quit and interrupt
 void event_sig(int sig)
 {
@@ -38,15 +69,36 @@ void event_sig(int sig)
 	epoll_ctl(*epfd, EPOLL_CTL_DEL, ev[i].fd, NULL);
 	close(ev[i].fd);
 	close(*epfd);
+	threadpool_destroy(thp);
 	fprintf(stdout, "shutdown complete\n");
 	exit(0);
 }
 
-void event_read_cb(struct event* rev, void* args)
+void event_read_cb(void* arg)
 {
 	int i;
+	struct event* rev;
+	rev = (struct event*)arg; 
 	memset(rev->buf, 0, sizeof(rev->buf));
-	rev->num = recv(rev->fd, rev->buf, BUF_MAXSIZE, 0);
+	rev->num = 0;
+	while(1)
+	{
+		rev->num = recv(rev->fd, &rev->buf[rev->num], BUF_MAXSIZE, 0);
+		if(rev->num > 0)
+		{
+			continue;
+		}
+		else if(rev->num == -1 && EAGAIN == errno)
+		{
+			break;
+		}
+		else if(rev->num == 0)
+		{
+			eventdel(rev);
+			return;
+		}
+		else	error_exit("read error: ");
+	}
 /*
 	for(i = 0; i < rev->num; i++)
 	{
@@ -55,13 +107,15 @@ void event_read_cb(struct event* rev, void* args)
 	//TODO: del send for itself can't get message
 	send(rev->fd, rev->buf, rev->num, 0);
 */
-	event_write_cb(rev, args);
+	event_write_cb(arg);
 	return;
 }
 
-void event_write_cb(struct event* wev, void *args)
+void event_write_cb(void *arg)
 {
-	int i;
+	struct event* wev;
+	int i, *epfd;
+	wev = (struct event*)arg;
 	if(wev->status == 1)
 	{
 		if(strcmp(wev->buf, "./exit") != 0)
@@ -123,49 +177,60 @@ void event_write_cb(struct event* wev, void *args)
 			eventdel(wev);
 		}
 	}
+	epfd = (int*)wev->arg;
+	reset_epolloneshot(*epfd, wev);
 	return;
 }
 
-void event_listen_cb(struct event* lev, void* args)
+void event_listen_cb(void* arg)
 {
 	struct sockaddr_in clientaddr;
-	struct epoll_event epev;
+	struct event* lev;
 	unsigned int socklen;
 	int fd, i, set;
 	int *epfd;
-	epfd = (int*)args;
-	for(i = 0; i < EVENT_SIZE; i++)
+	lev = (struct event*)arg;
+	epfd = (int*)lev->arg;
+	
+	while(1)
 	{
-		if(ev[i].fd == -1)	break;
+		fd = accept(lev->fd, (struct sockaddr*)&clientaddr, &socklen);
+		if(fd > 0){
+			for(i = 0; i < EVENT_SIZE; i++)
+			{
+				if(ev[i].fd == -1)	break;
+			}
+			printf("new connect: %s\n", inet_ntoa(clientaddr.sin_addr));		
+			if(ev[i].fd == -1)
+			set_nonblock(fd);
+			eventset(&ev[i], fd, event_read_cb, epfd, epfd);
+		}
+		else if(fd == -1 && errno == EAGAIN)
+		{
+			break;
+		}
+		else
+		{
+			error_exit("client accept fail: ");
+		}
 	}
-	fd = accept(lev->fd, (struct sockaddr*)&clientaddr, &socklen);
-	printf("new connect: %s\n", inet_ntoa(clientaddr.sin_addr));
-	if(fd == -1)
-	{
-		error_exit("client accept fail: ");
-	}
-	set = fcntl(fd, F_GETFD);
-	set |= O_NONBLOCK;
-	if(fcntl(fd, F_SETFD, set) == -1)
-	{
-		error_exit("file control set fail: ");
-	};
-
-
-	eventset(&ev[i], fd, event_read_cb, (void*)&ev[i]);
-	epev.events = EPOLLIN | EPOLLET;
-	epev.data.ptr = (void*)&ev[i];
-	epoll_ctl(*epfd, EPOLL_CTL_ADD, fd, &epev);
+	/*test*/
+	reset_epolloneshot(*epfd, lev);
+	printf("exit\n");
 	return;
 }
 
 //set an event
-void eventset(struct event* ev, int fd, void(*func)(struct event* ev, void* args),void* arg)
+void eventset(struct event* ev, int fd, void(*func)(void* arg),void* arg, int* epfd)
 {
 	ev->fd = fd;
 	ev->func = func;
 	ev->arg = arg;
 	ev->num = strlen(ev->buf);
+	struct epoll_event epev;
+	epev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
+	epev.data.ptr = ev;
+	epoll_ctl(*epfd, EPOLL_CTL_ADD, fd, &epev);
 }
 
 //del an event
@@ -182,7 +247,6 @@ void eventdel(struct event* ev)
 void init_sock_bind(int *epfd, int num)
 {
 	struct sockaddr_in servaddr;
-	struct epoll_event epev;
 	int listenfd, set;
 
 	//init sockaddr_in
@@ -191,24 +255,13 @@ void init_sock_bind(int *epfd, int num)
 	servaddr.sin_port = htons(SERVPORT);
 
 
-
-	//init epoll_event
-	epev.data.ptr = (void*)&ev[EVENT_SIZE];
-	epev.events = EPOLLIN;
-    
-	
 	//init listenfd
 	listenfd = socket(AF_INET, SOCK_STREAM, 0);
 	if(listenfd == -1)	error_exit("socket create fail: ");
 
 	//ET for listenfd
 
-	set = fcntl(listenfd, F_GETFD);
-	set |= O_NONBLOCK;
-	if(fcntl(listenfd, F_SETFD, set) == -1)
-	{
-		error_exit("set file control fail: ");
-	}
+	set_nonblock(listenfd);
 
 	//listenfd reuse port
 	int opt = 1;
@@ -224,10 +277,5 @@ void init_sock_bind(int *epfd, int num)
 	}
 
 	//init event[1024](listenfd event)
-	eventset(&ev[EVENT_SIZE], listenfd, event_listen_cb, (void*)epfd);
-
-	if(epoll_ctl(*epfd, EPOLL_CTL_ADD, listenfd, &epev) == -1)
-	{
-		error_exit("epoll_ctl set fail: ");
-	}
+	eventset(&ev[EVENT_SIZE], listenfd, event_listen_cb, (void*)epfd, epfd);
 }

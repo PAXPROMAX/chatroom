@@ -44,24 +44,31 @@
     #include<signal.h>
 #endif
 
+#ifndef _threadpool_h
+    #include "threadpool.h"
+#endif
+
 struct event
 {
 	int fd;		//fd
 	int num;	//use?
 	char buf[BUF_MAXSIZE]; //buf
-	void(*func)(struct event* ev, void* args);	//cb
+	void(*func)(void* arg);	//cb
 	void* arg;	//arg
     int status;
 };
 
 extern struct event ev[EVENT_SIZE + 1];
 
+extern struct threadpool_t *thp;
 void error_exit(const char* err);
 void init_event(struct event* ev, int num);
+void set_nonblock(int fd);
+void *process(void *arg);
 void event_sig(int sig);
-void event_read_cb(struct event* ev, void* args);
-void event_write_cb(struct event* ev, void *args);
-void event_listen_cb(struct event* ev, void* args);
-void eventset(struct event* ev, int fd, void(*func)(struct event* ev, void* args),void* arg);
+void event_read_cb(void* arg);
+void event_write_cb(void *arg);
+void event_listen_cb(void* args);
+void eventset(struct event* ev, int fd, void(*func)(void* args),void* arg, int* epfd);
 void eventdel(struct event* ev);
 void init_sock_bind(int *epfd, int num);

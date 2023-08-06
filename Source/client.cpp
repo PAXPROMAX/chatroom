@@ -130,16 +130,6 @@ void* pthread_write(void* arg)
         else if(ctrl != '9')
         {
             user_operation(buf, BUF_MAXSIZE, &ctrl);
-            /*
-            do
-            {
-                ret = recv(fd, buf, sizeof(buf), MSG_DONTWAIT);
-            }while(num > 0);
-            if(errno != EAGAIN)
-            {
-                error_exit("read fail: ");
-            }
-            */
             send(fd, buf, strlen(buf), 0);
             time = 6;
             num = 0;
@@ -247,7 +237,7 @@ int main(int argc, char *argv[])
             }
             else 
             {
-                if(errno = EAGAIN) continue;
+                if(errno == EAGAIN) continue;
                 error_exit("read fail: ");
             }
         }

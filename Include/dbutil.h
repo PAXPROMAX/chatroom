@@ -72,4 +72,6 @@ public:
  * @return bool 成功为1, 失败为0
  */
     bool user_register(const char* name, const char* password);
+
+    bool user_delete(const char* name, const char* password);
 };

@@ -48,13 +48,16 @@
     #include "threadpool.h"
 #endif
 
+#ifndef _STRING
+    #include<string>
+#endif
 struct event
 {
 	int fd;		/*文件描述符*/
 	int num;	/*buf中的字节数*/
 
     
-	char buf[BUF_MAXSIZE]; /*用于接收数据*/
+	std::string buf; /*用于接收数据*/
 	void(*func)(void* arg);	/*回调函数, 设置为epoll_read_cb*/
 
 	void* arg;	    /*其他额外参数, 设置为指向epoll文件描述符的地址*/
@@ -142,8 +145,15 @@ void eventdel(struct event* ev);
 
 /**
  * @brief 将监听文件描述符设置到epoll上
- * @param ev       epoll的文件描述符
- * @param ev       单次监听的最大数量
+ * @param epfd       epoll的文件描述符
+ * @param num       单次监听的最大数量
  * @return void
  */
 void init_sock_bind(int *epfd, int num);
+
+/**
+ * @brief 将监听文件描述符设置到epoll上
+ * @param wev       客户端对应的event
+ * @return void
+ */
+void user_conection_sql(struct event* wev);

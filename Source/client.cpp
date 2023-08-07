@@ -21,6 +21,7 @@ void user_menu()
     printf("*****************\n");
     printf("** 1.login     **\n");
     printf("** 2.register  **\n");
+    printf("** 3.delete    **\n");
     printf("** 0.exit      **\n");
     printf("*****************\n");
     return;
@@ -136,6 +137,7 @@ void* pthread_write(void* arg)
             {
                 ctrl = '9';
                 printf("login success\n");
+                continue;
             }
             else if(strcmp(buf, "login fail") == 0)
             {
@@ -149,7 +151,15 @@ void* pthread_write(void* arg)
             {
                 printf("register fail\n");
             }
-            continue;
+            else if(strcmp(buf, "delete success") == 0)
+            {
+                printf("delete success\n");
+            }
+            else if(strcmp(buf, "delete fail") == 0)
+            {
+                printf("delete fail\n");
+            }
+            set_ctrl_char(&ctrl);
         }
         else if(ctrl == '9')
         {

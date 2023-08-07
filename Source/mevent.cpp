@@ -78,14 +78,16 @@ void event_read_cb(void* arg)
 {
 	int i;
 	struct event* rev;
+	char buf[BUF_MAXSIZE];
 	rev = (struct event*)arg; 
-	memset(rev->buf, 0, sizeof(rev->buf));
+	rev->buf.clear();
 	rev->num = 0;
 	while(1)
 	{
-		rev->num = recv(rev->fd, &rev->buf[rev->num], BUF_MAXSIZE - rev->num, 0);
+		rev->num = recv(rev->fd, buf, BUF_MAXSIZE, 0);	/*不断recv直到返回-1, 将数据全部装入rwv->buf中,  结束循环while(1)*/
 		if(rev->num > 0)
 		{
+			rev->buf.append(buf);
 			continue;
 		}
 		else if(rev->num == -1 && EAGAIN == errno)
@@ -99,21 +101,20 @@ void event_read_cb(void* arg)
 		}
 		else	error_exit("read error: ");
 	}
-
+	printf("recv: %s\n", rev->buf.c_str());
 	event_write(arg);
 	return;
 }
 
 void event_write(void *arg)
 {
-	printf("write cb\n");
 	struct event* wev;
-	int i, *epfd;
+	int i, *epfd, ret;
 	wev = (struct event*)arg;
-	wev->num = strlen(wev->buf);
+	wev->num = strlen(wev->buf.c_str());
 	if(wev->status == 1)
 	{
-		if(strcmp(wev->buf, "./exit") != 0)
+		if(strcmp(wev->buf.c_str(), "./exit") != 0)
 		{
 			for(i = 0; i < EVENT_SIZE; i++)
 			{
@@ -121,7 +122,26 @@ void event_write(void *arg)
 				{
 					continue;
 				}
-				send(ev[i].fd, wev->buf, wev->num, 0);
+				std::string str = wev->buf;
+				while(1)
+				{
+					ret = send(ev[i].fd, str.c_str(), wev->num, 0);	/*将wev->buf中的所有数据发送,  结束循环while(1)*/
+					if(ret > 0)
+					{
+						str = str.erase(ret);
+						wev->num -= ret;
+						continue;
+					}
+					else if(ret == 0)
+					{
+						break;
+					}
+					else if(EAGAIN == errno && ret == -1)
+					{
+						break;
+					}
+					else	error_exit("read error: ");
+				}
 			}
 		}
 		else
@@ -131,46 +151,7 @@ void event_write(void *arg)
 	}
 	else
 	{
-		char* ctrl;
-		char* name;
-		char* password;
-		ctrl = strtok(wev->buf, "=");
-		name = strtok(NULL, "=");
-		password = strtok(NULL, "\0");
-		if(*ctrl == '1')
-		{
-			Dbutil* util = new Dbutil(NULL, 0);
-			if(util->user_login_verify(name, password) == 1)
-			{
-				send(wev->fd, "login success", sizeof("login success"), 0);
-				wev->status = 1;
-			}
-			else
-			{
-				send(wev->fd, "login fail", sizeof("login fail"), 0);
-			}
-			delete util;
-		}
-
-		//wait for test
-		else if(*ctrl == '2')
-		{
-			Dbutil* util = new Dbutil(NULL, 0);
-			if(util->user_register(name, password) == 1)
-			{
-				send(wev->fd, "register success", sizeof("register success"), 0);
-			}
-			else
-			{
-				send(wev->fd, "register fail", sizeof("register fail"), 0);
-			}
-			delete util;
-		}
-		else if(*ctrl == '0')
-		{
-			wev->status = 0;
-			eventdel(wev);
-		}
+		user_conection_sql(wev);
 	}
 	epfd = (int*)wev->arg;
 	reset_epolloneshot(*epfd, wev);
@@ -189,7 +170,7 @@ void event_listen_cb(void* arg)
 	
 	while(1)
 	{
-		fd = accept(lev->fd, (struct sockaddr*)&clientaddr, &socklen);
+		fd = accept(lev->fd, (struct sockaddr*)&clientaddr, &socklen);	//不断执行accept直到返回-1为止, 结束循环while(1)
 		if(fd > 0){
 			for(i = 0; i < EVENT_SIZE; i++)
 			{
@@ -209,8 +190,7 @@ void event_listen_cb(void* arg)
 			error_exit("client accept fail: ");
 		}
 	}
-	/*test*/
-	reset_epolloneshot(*epfd, lev);
+	reset_epolloneshot(*epfd, lev);				/*重新设置EPOLLONESHOT*/
 	printf("exit\n");
 	return;
 }
@@ -218,11 +198,11 @@ void event_listen_cb(void* arg)
 //set an event
 void eventset(struct event* ev, int fd, void(*func)(void* arg),void* arg, int* epfd)
 {
+	struct epoll_event epev;
 	ev->fd = fd;
 	ev->func = func;
 	ev->arg = arg;
-	ev->num = strlen(ev->buf);
-	struct epoll_event epev;
+	ev->num = strlen(ev->buf.c_str());
 	epev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
 	epev.data.ptr = ev;
 	epoll_ctl(*epfd, EPOLL_CTL_ADD, fd, &epev);
@@ -270,6 +250,66 @@ void init_sock_bind(int *epfd, int num)
 		error_exit("listen fail: ");
 	}
 
-
+	//给listenfd设置一个event, 并注册回调函数
 	eventset(&ev[EVENT_SIZE], listenfd, event_listen_cb, (void*)epfd, epfd);
+}
+
+
+void user_conection_sql(struct event* wev)
+{
+		char* ctrl;
+		char* name;
+		char* password;
+		char* operation;
+		ctrl = strtok(wev->buf.data(), "=");
+		name = strtok(NULL, "=");
+		password = strtok(NULL, "\0");
+		if(*ctrl == '1')
+		{
+			Dbutil* util = new Dbutil(NULL, 0);
+			if(util->user_login_verify(name, password) == 1)
+			{
+				send(wev->fd, "login success", sizeof("login success"), 0);
+				wev->status = 1;
+			}
+			else
+			{
+				send(wev->fd, "login fail", sizeof("login fail"), 0);
+			}
+			delete util;
+		}
+
+
+		else if(*ctrl == '2')
+		{
+			Dbutil* util = new Dbutil(NULL, 0);
+			if(util->user_register(name, password) == 1)
+			{
+				send(wev->fd, "register success", sizeof("register success"), 0);
+			}
+			else
+			{
+				send(wev->fd, "register fail", sizeof("register fail"), 0);
+			}
+			delete util;
+		}
+		else if(*ctrl == '3')
+		{
+			Dbutil* util = new Dbutil(NULL, 0);
+			if(util->user_delete(name, password) == 1)
+			{
+				send(wev->fd, "delete success", sizeof("delete success"), 0);
+			}
+			else
+			{
+				send(wev->fd, "delete fail", sizeof("delete fail"), 0);
+			}
+			delete util;
+		}
+		else if(*ctrl == '0')
+		{
+			wev->status = 0;
+			eventdel(wev);
+			return;
+		}
 }

@@ -156,4 +156,6 @@ void init_sock_bind(int *epfd, int num);
  * @param wev       客户端对应的event
  * @return void
  */
-void user_conection_sql(struct event* wev);
+bool user_split_ctrl(struct event* wev);
+
+void reset_epolloneshot(int epfd, struct event* ev);

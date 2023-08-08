@@ -84,6 +84,7 @@ void event_read_cb(void* arg)
 	rev = (struct event*)arg; 
 	rev->buf.clear();
 	rev->num = 0;
+	memset(buf, 0, BUF_MAXSIZE);
 	while(1)
 	{
 		rev->num = recv(rev->fd, buf, BUF_MAXSIZE, 0);	/*不断recv直到返回-1, 将数据全部装入rwv->buf中,  结束循环while(1)*/
@@ -113,10 +114,14 @@ void event_write(void *arg)
 	struct event* wev;
 	int i, *epfd, ret;
 	wev = (struct event*)arg;
-	wev->num = strlen(wev->buf.c_str());
+	wev->num = wev->buf.size();
+	std::string str = wev->buf;
+	printf("%s\n", wev->buf.c_str());
+	printf("ev[%d]:status:%d\n", wev->fd, wev->status);
 	if(wev->status == 1)											/*wev所指向的客户端已经登录*/
 	{
-		if(strcmp(wev->buf.c_str(), "./exit") == 0)					//如果收到./exit, 说明客户端退出登录
+		printf("compare: %d\n", wev->buf.compare("./exit\0"));
+		if(wev->buf.compare("./exit") == 0)					//如果收到./exit, 说明客户端退出登录
 		{
 			wev->status = 0;
 		}
@@ -128,18 +133,26 @@ void event_write(void *arg)
 				{
 					continue;
 				}
-				std::string str = wev->buf;
+				printf("ev[%d]----ev[%d]\n", wev->fd, ev[i].fd);
+				str = wev->buf;
+				printf("send buf: %s\n", str.c_str());
+				wev->num = wev->buf.size();
 				while(1)
 				{
-					ret = send(ev[i].fd, str.c_str(), wev->num, 0);	/*将wev->buf中的所有数据发送,  结束循环while(1)*/
+					ret = send(ev[i].fd, str.c_str(), str.size(), 0);	/*将wev->buf中的所有数据发送,  结束循环while(1)*/
+					printf("ret: %d\n", ret);
 					if(ret > 0)
 					{
-						str = str.erase(ret);
-						wev->num -= ret;
+						str = str.erase(0, ret);
+						if(str.size() == 0)
+						{
+							break;
+						}
 						continue;
 					}
 					else if(ret == 0)
 					{
+						eventdel(&ev[i]);
 						break;
 					}
 					else if(EAGAIN == errno && ret == -1)
@@ -149,11 +162,15 @@ void event_write(void *arg)
 					else	error_exit("read error: ");
 				}
 			}
+			printf("ev[%d]: send complete\n", wev->fd);
 		}
 	}
 	else									/*wev指向的客户端没有登录, 对发来的信息进行SQL分析*/
 	{
-		user_conection_sql(wev);
+		if(user_split_ctrl(wev) == false)
+		{
+			return;
+		}
 	}
 	epfd = (int*)wev->arg;
 	reset_epolloneshot(*epfd, wev);
@@ -200,7 +217,6 @@ void event_listen_cb(void* arg)
 		}
 	}
 	reset_epolloneshot(*epfd, lev);				/*重新设置EPOLLONESHOT*/
-	printf("exit\n");
 	return;
 }
 
@@ -220,6 +236,7 @@ void eventset(struct event* ev, int fd, void(*func)(void* arg),void* arg, int* e
 
 void eventdel(struct event* ev)
 {
+	epoll_ctl(*(int*)ev->arg, EPOLL_CTL_DEL, ev->fd, NULL);
 	close(ev->fd);
 	ev->fd = -1;
 	ev->func = NULL;
@@ -265,7 +282,7 @@ void init_sock_bind(int *epfd, int num)
 }
 
 
-void user_conection_sql(struct event* wev)
+bool user_split_ctrl(struct event* wev)
 {
 		char* ctrl;
 		char* name;
@@ -274,9 +291,16 @@ void user_conection_sql(struct event* wev)
 		ctrl = strtok(wev->buf.data(), "=");
 		name = strtok(NULL, "=");
 		password = strtok(NULL, "\0");
-		if(*ctrl == '1')		//收到的首字节为0, 说明客户端请求登录
+		if(*ctrl == '0')	//收到的首字节为0, 说明客户端退出
 		{
-			Dbutil* util = new Dbutil(NULL, 0);
+			printf("ev[%d] exit\n", wev->fd);
+			eventdel(wev);
+			return false;
+		}
+
+		Dbutil* util = new Dbutil(NULL, 0);
+		if(*ctrl == '1')		//收到的首字节为1, 说明客户端请求登录
+		{
 			if(util->user_login_verify(name, password) == 1)
 			{
 				send(wev->fd, "login success", sizeof("login success"), 0);
@@ -286,13 +310,11 @@ void user_conection_sql(struct event* wev)
 			{
 				send(wev->fd, "login fail", sizeof("login fail"), 0);
 			}
-			delete util;
 		}
 
 
-		else if(*ctrl == '2')		//收到的首字节为0, 说明客户端请求注册用户
+		else if(*ctrl == '2')		//收到的首字节为2, 说明客户端请求注册用户
 		{
-			Dbutil* util = new Dbutil(NULL, 0);
 			if(util->user_register(name, password) == 1)
 			{
 				send(wev->fd, "register success", sizeof("register success"), 0);
@@ -301,11 +323,9 @@ void user_conection_sql(struct event* wev)
 			{
 				send(wev->fd, "register fail", sizeof("register fail"), 0);
 			}
-			delete util;
 		}
-		else if(*ctrl == '3')			//收到的首字节为0, 说明客户端请求删除用户
+		else if(*ctrl == '3')			//收到的首字节为3, 说明客户端请求删除用户
 		{
-			Dbutil* util = new Dbutil(NULL, 0);
 			if(util->user_delete(name, password) == 1)
 			{
 				send(wev->fd, "delete success", sizeof("delete success"), 0);
@@ -314,12 +334,7 @@ void user_conection_sql(struct event* wev)
 			{
 				send(wev->fd, "delete fail", sizeof("delete fail"), 0);
 			}
-			delete util;
 		}
-		else if(*ctrl == '0')	//收到的首字节为0, 说明客户端退出
-		{
-			wev->status = 0;
-			eventdel(wev);
-			return;
-		}
+		delete util;
+		return true;
 }

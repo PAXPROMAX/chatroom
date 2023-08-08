@@ -118,6 +118,7 @@ void* pthread_write(void* arg)
     int num, time, ret;
     while(1)
     {
+        memset(buf, 0,sizeof(buf));
         if(ctrl == '0')
         {
             send(fd, "0=0=0", sizeof("0=0=0"), 0);
@@ -127,9 +128,9 @@ void* pthread_write(void* arg)
         {
             user_operation(buf, BUF_MAXSIZE, &ctrl);
             send(fd, buf, strlen(buf), 0);
+            printf("send: %s\n", buf);
             time = 6;
             num = 0;
-            memset(buf, 0,sizeof(buf));
             printf("set complete\n");
             num = recv(fd, buf, BUF_MAXSIZE, 0);
             fprintf(stdout, "strcmp: %d, buf: %s\n",strcmp(buf, "login success"), buf);
@@ -168,12 +169,14 @@ void* pthread_write(void* arg)
             if(strcmp(buf, "./exit") == 0) 
             {
                 ctrl = '8';
-                send(fd, buf, strlen(buf), 0);
+                send(fd, "./exit", strlen("./exit"), 0);
+                printf("send: %s\n", buf);
                 set_ctrl_char(&ctrl);
             }
             else
             {
                 send(fd, buf, sizeof(buf), 0);
+                printf("send: %s\n", buf);
             }
         }
     }

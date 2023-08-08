@@ -57,7 +57,7 @@ void user_input(char* buf, int size)
 	}
 }
 
-void user_operation(char* buf, int size, char* ctrl)
+int user_operation(char* buf, int size, char* ctrl)
 {
     char name[256], password[256];
     printf("input name: ");
@@ -65,14 +65,14 @@ void user_operation(char* buf, int size, char* ctrl)
     if(strcmp(name, "./exit") == 0)
     {
         set_ctrl_char(ctrl);
-        return;
+        return 0;
     }
     printf("input password: ");
     user_input(password, 256);
     if(strcmp(password, "./exit") == 0)
     {
         set_ctrl_char(ctrl);
-        return;
+        return 0;
     }
     if(*ctrl == '2')    //register == '2', other operation don't need comfirm
     {
@@ -82,12 +82,13 @@ void user_operation(char* buf, int size, char* ctrl)
         if(strcmp(comfirm, "./exit") == 0)
         {
             set_ctrl_char(ctrl);
-            return;
+            return -1;
         }
         if(strcmp(password, comfirm) != 0)
         {
-            printf("different password, regiser again\n");
-            return;
+            printf("different password, regiser fail\n");
+            set_ctrl_char(ctrl);
+            return -1;
         }
     }
     if(size > sizeof(name) + sizeof(password) + 2)
@@ -99,7 +100,7 @@ void user_operation(char* buf, int size, char* ctrl)
         printf("user ctrl fail: lenth of name and password is too long or buffer size is too small\n");
         exit(-1);
     }
-    return;
+    return 0;
 }
 
 void user_exit(int fd)
@@ -126,7 +127,10 @@ void* pthread_write(void* arg)
         }
         else if(ctrl != '9')
         {
-            user_operation(buf, BUF_MAXSIZE, &ctrl);
+            while(user_operation(buf, BUF_MAXSIZE, &ctrl) == -1)
+            {
+                
+            }
             send(fd, buf, strlen(buf), 0);
             printf("send: %s\n", buf);
             time = 6;
@@ -222,6 +226,7 @@ int main(int argc, char *argv[])
                 {
                     printf(">>>%s\n", buf);
                     printf("num = %d\n", num);
+                    printf("\n");
                     continue;
                 }
             }

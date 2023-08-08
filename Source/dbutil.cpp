@@ -116,7 +116,7 @@ bool Dbutil::user_login_verify(const char* name, const char* password)
     if(rows == 1)
     {
         row = mysql_fetch_row(result);
-        printf("user login success: id: %s, password: %s, access: %s\n", row[0], row[1], reset_password.c_str());
+        printf("user verify success: id: %s, password: %s, access: %s\n", row[0], row[1], reset_password.c_str());
         mysql_free_result(result);//释放结果集所占内存
         return true;
     }
@@ -126,7 +126,7 @@ bool Dbutil::user_login_verify(const char* name, const char* password)
     }
     else
     {
-        printf("user login fail: name: %s, password: %s\n", reset_name.c_str(), reset_password.c_str());
+        printf("user verify fail: name: %s, password: %s\n", reset_name.c_str(), reset_password.c_str());
     }
     mysql_free_result(result);//释放结果集所占内存
     return false;

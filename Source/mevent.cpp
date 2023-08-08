@@ -16,8 +16,8 @@ void init_event(struct event* ev, int num)
 		ev[i].fd = -1;
 		ev[i].func = NULL;
 		ev[i].arg = NULL;
-		ev[i].num = 0;
 		ev[i].status = 0;
+		ev[i].username.clear();
 	}
 }
 
@@ -78,26 +78,26 @@ void event_sig(int sig)
 
 void event_read_cb(void* arg)
 {
-	int i;
+	int i, ret;
 	struct event* rev;
 	char buf[BUF_MAXSIZE];
 	rev = (struct event*)arg; 
 	rev->buf.clear();
-	rev->num = 0;
+	ret = 0;
 	memset(buf, 0, BUF_MAXSIZE);
 	while(1)
 	{
-		rev->num = recv(rev->fd, buf, BUF_MAXSIZE, 0);	/*不断recv直到返回-1, 将数据全部装入rwv->buf中,  结束循环while(1)*/
-		if(rev->num > 0)
+		ret = recv(rev->fd, buf, BUF_MAXSIZE, 0);	/*不断recv直到返回-1, 将数据全部装入rwv->buf中,  结束循环while(1)*/
+		if(ret > 0)
 		{
 			rev->buf.append(buf);
 			continue;
 		}
-		else if(rev->num == -1 && EAGAIN == errno)
+		else if(ret == -1 && EAGAIN == errno)
 		{
 			break;
 		}
-		else if(rev->num == 0)
+		else if(ret == 0)
 		{
 			eventdel(rev);
 			return;
@@ -114,8 +114,9 @@ void event_write(void *arg)
 	struct event* wev;
 	int i, *epfd, ret;
 	wev = (struct event*)arg;
-	wev->num = wev->buf.size();
-	std::string str = wev->buf;
+	std::string str = wev->username;
+	str.append("\n\t");
+	str.append(wev->buf);
 	printf("%s\n", wev->buf.c_str());
 	printf("ev[%d]:status:%d\n", wev->fd, wev->status);
 	if(wev->status == 1)											/*wev所指向的客户端已经登录*/
@@ -123,7 +124,7 @@ void event_write(void *arg)
 		printf("compare: %d\n", wev->buf.compare("./exit\0"));
 		if(wev->buf.compare("./exit") == 0)					//如果收到./exit, 说明客户端退出登录
 		{
-			wev->status = 0;
+			user_offline(wev);
 		}
 		else														/*收到不是./exit, 说明客户端正常发送数据*/
 		{
@@ -133,10 +134,11 @@ void event_write(void *arg)
 				{
 					continue;
 				}
-				printf("ev[%d]----ev[%d]\n", wev->fd, ev[i].fd);
-				str = wev->buf;
+				printf("ev[%d]---->ev[%d], %s----->%s\n", wev->fd, ev[i].fd, wev->username.c_str(), ev[i].username.c_str());
+				str = wev->username;
+				str.append("\n\t");
+				str.append(wev->buf);
 				printf("send buf: %s\n", str.c_str());
-				wev->num = wev->buf.size();
 				while(1)
 				{
 					ret = send(ev[i].fd, str.c_str(), str.size(), 0);	/*将wev->buf中的所有数据发送,  结束循环while(1)*/
@@ -227,7 +229,6 @@ void eventset(struct event* ev, int fd, void(*func)(void* arg),void* arg, int* e
 	ev->fd = fd;
 	ev->func = func;
 	ev->arg = arg;
-	ev->num = strlen(ev->buf.c_str());
 	epev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
 	epev.data.ptr = ev;
 	epoll_ctl(*epfd, EPOLL_CTL_ADD, fd, &epev);
@@ -241,8 +242,7 @@ void eventdel(struct event* ev)
 	ev->fd = -1;
 	ev->func = NULL;
 	ev->arg = NULL;
-	ev->num = 0;
-	ev->status = 0;
+	user_offline(ev);
 }
 
 void init_sock_bind(int *epfd, int num)
@@ -284,6 +284,7 @@ void init_sock_bind(int *epfd, int num)
 
 bool user_split_ctrl(struct event* wev)
 {
+		int i;
 		char* ctrl;
 		char* name;
 		char* password;
@@ -301,10 +302,11 @@ bool user_split_ctrl(struct event* wev)
 		Dbutil* util = new Dbutil(NULL, 0);
 		if(*ctrl == '1')		//收到的首字节为1, 说明客户端请求登录
 		{
-			if(util->user_login_verify(name, password) == 1)
+			i = comfirm_online(name);
+			if(util->user_login_verify(name, password) == 1 && i == EVENT_SIZE)
 			{
 				send(wev->fd, "login success", sizeof("login success"), 0);
-				wev->status = 1;
+				user_online(wev, name);
 			}
 			else
 			{
@@ -326,7 +328,8 @@ bool user_split_ctrl(struct event* wev)
 		}
 		else if(*ctrl == '3')			//收到的首字节为3, 说明客户端请求删除用户
 		{
-			if(util->user_delete(name, password) == 1)
+			i = comfirm_online(name);
+			if(util->user_delete(name, password) == 1 && i == EVENT_SIZE)
 			{
 				send(wev->fd, "delete success", sizeof("delete success"), 0);
 			}
@@ -337,4 +340,35 @@ bool user_split_ctrl(struct event* wev)
 		}
 		delete util;
 		return true;
+}
+
+
+void user_online(struct event* ev, const char* name)
+{
+	printf("user online: %s\n", ev->username.c_str());
+	ev->status = 1;
+	ev->username = name;
+}
+
+void user_offline(struct event* ev)
+{
+	printf("user offline: %s\n", ev->username.c_str());
+	ev->status = 0;
+	ev->username.clear();
+}
+
+int comfirm_online(const char* name)
+{
+	int i;
+	for(i = 0; i < EVENT_SIZE; i++)
+	{
+		if(ev[i].fd != -1)
+		{
+			if(ev[i].username.compare(name) == 0)
+			{
+				return i;
+			}
+		}
+	}
+	return i;
 }

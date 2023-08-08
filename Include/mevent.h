@@ -1,7 +1,12 @@
 #define _mevent_h
 
-#ifndef _netset_h
-    #include "netset.h"
+#ifndef SERVPORT
+    #define SERVPORT 9690
+    //extern int servport;
+#endif
+
+#ifndef BUF_MAXSIZE
+    #define BUF_MAXSIZE 4096
 #endif
 
 #ifndef EVENT_SIZE          //客户端连接最大数量
@@ -54,7 +59,6 @@
 struct event
 {
 	int fd;		/*文件描述符*/
-	int num;	/*buf中的字节数*/
 
     
 	std::string buf; /*用于接收数据*/
@@ -62,6 +66,8 @@ struct event
 
 	void* arg;	    /*其他额外参数, 设置为指向epoll文件描述符的地址*/
     int status;     /*是否登录, 1为登录, 0为离线*/
+
+    std::string username;    /* 使用的用户名 */
 };
 
 extern struct event ev[EVENT_SIZE + 1];
@@ -158,4 +164,32 @@ void init_sock_bind(int *epfd, int num);
  */
 bool user_split_ctrl(struct event* wev);
 
+/**
+ * @brief 重新设置EPOLLONESHOT
+ * @param epfd       epoll
+ * @param ev       需要设置的ev
+ * @return void
+ */
 void reset_epolloneshot(int epfd, struct event* ev);
+
+/**
+ * @brief 用户登录
+ * @param ev       客户端对应的event
+ * @param name       登录使用的用户名
+ * @return void
+ */
+void user_online(struct event* ev, const char* name);
+
+ /**
+ * @brief 用户离线
+ * @param ev       客户端对应的event
+ * @return void
+ */
+void user_offline(struct event* ev);
+
+/**
+ * @brief 查询某个用户是否登录
+ * @param name    需要查询的用户名
+ * @return 如果存在, 返回存储用户名所对应event的下标, 否则返回EVENT_SIZE
+ */
+int comfirm_online(const char* name);

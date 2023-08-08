@@ -4,7 +4,7 @@
     #include "netset.h"
 #endif
 
-#ifndef EVENT_SIZE 
+#ifndef EVENT_SIZE          //客户端连接最大数量
     #define EVENT_SIZE 1024
 #endif
 
@@ -152,7 +152,7 @@ void eventdel(struct event* ev);
 void init_sock_bind(int *epfd, int num);
 
 /**
- * @brief 将监听文件描述符设置到epoll上
+ * @brief 将客户端发送的数据进行与SQL相关的处理(注册, 登录, 删除)
  * @param wev       客户端对应的event
  * @return void
  */

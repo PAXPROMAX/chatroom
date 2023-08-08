@@ -57,7 +57,9 @@ void event_sig(int sig)
 	fprintf(stdout, "detected quit or interrupt signal, server shutdown\n");
 	int i = 0;
 	int* epfd = (int*)ev[EVENT_SIZE].arg;
-	threadpool_destroy(thp);
+	threadpool_destroy(thp);						/*销毁线程池*/
+
+	/*关闭反应堆*/
 	for(i = 0; i < EVENT_SIZE; i++)
 	{
 		if(ev[i].fd != -1)
@@ -112,13 +114,17 @@ void event_write(void *arg)
 	int i, *epfd, ret;
 	wev = (struct event*)arg;
 	wev->num = strlen(wev->buf.c_str());
-	if(wev->status == 1)
+	if(wev->status == 1)											/*wev所指向的客户端已经登录*/
 	{
-		if(strcmp(wev->buf.c_str(), "./exit") != 0)
+		if(strcmp(wev->buf.c_str(), "./exit") == 0)					//如果收到./exit, 说明客户端退出登录
+		{
+			wev->status = 0;
+		}
+		else														/*收到不是./exit, 说明客户端正常发送数据*/
 		{
 			for(i = 0; i < EVENT_SIZE; i++)
 			{
-				if(wev->fd == ev[i].fd || ev[i].status == 0)
+				if(wev->fd == ev[i].fd || ev[i].status == 0)		/*event未启用(socket未连接)或者未上线则不会发送消息*/
 				{
 					continue;
 				}
@@ -144,12 +150,8 @@ void event_write(void *arg)
 				}
 			}
 		}
-		else
-		{
-			wev->status = 0;
-		}
 	}
-	else
+	else									/*wev指向的客户端没有登录, 对发来的信息进行SQL分析*/
 	{
 		user_conection_sql(wev);
 	}
@@ -172,14 +174,21 @@ void event_listen_cb(void* arg)
 	{
 		fd = accept(lev->fd, (struct sockaddr*)&clientaddr, &socklen);	//不断执行accept直到返回-1为止, 结束循环while(1)
 		if(fd > 0){
-			for(i = 0; i < EVENT_SIZE; i++)
+			for(i = 0; i < EVENT_SIZE; i++)		//寻找一个未使用的event
 			{
 				if(ev[i].fd == -1)	break;
 			}
-			printf("new connect: %s\n", inet_ntoa(clientaddr.sin_addr));		
-			if(ev[i].fd == -1)
-			set_nonblock(fd);
-			eventset(&ev[i], fd, event_read_cb, epfd, epfd);
+			if(i == EVENT_SIZE)			//如果i到达EVENT_SIZE, 说明event数组已满, 不能继续新增连接, 停止本次连接
+			{
+				close(fd);
+				return;
+			}
+				printf("new connect: %s\n", inet_ntoa(clientaddr.sin_addr));		
+				if(ev[i].fd == -1)
+
+				/*对新的文件描述符设置边缘触发模式, 并装入空闲event中*/
+				set_nonblock(fd);
+				eventset(&ev[i], fd, event_read_cb, epfd, epfd);
 		}
 		else if(fd == -1 && errno == EAGAIN)
 		{
@@ -195,7 +204,7 @@ void event_listen_cb(void* arg)
 	return;
 }
 
-//set an event
+
 void eventset(struct event* ev, int fd, void(*func)(void* arg),void* arg, int* epfd)
 {
 	struct epoll_event epev;
@@ -208,7 +217,7 @@ void eventset(struct event* ev, int fd, void(*func)(void* arg),void* arg, int* e
 	epoll_ctl(*epfd, EPOLL_CTL_ADD, fd, &epev);
 }
 
-//del an event
+
 void eventdel(struct event* ev)
 {
 	close(ev->fd);
@@ -235,12 +244,13 @@ void init_sock_bind(int *epfd, int num)
 	if(listenfd == -1)	error_exit("socket create fail: ");
 
 
-	set_nonblock(listenfd);	/*设置listenfd为NONBLOCK模式*/
+	set_nonblock(listenfd);					/*设置listenfd为NONBLOCK模式*/
 
 	//设置端口复用
 	int opt = 1;
 	if(setsockopt(listenfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof opt) == -1)	error_exit("setsockopt error");
 
+	//继续初始化listenfd
 	if(bind(listenfd, (struct sockaddr*)&servaddr, sizeof(servaddr)) == -1)
 	{
 		error_exit("bind fail: ");
@@ -264,7 +274,7 @@ void user_conection_sql(struct event* wev)
 		ctrl = strtok(wev->buf.data(), "=");
 		name = strtok(NULL, "=");
 		password = strtok(NULL, "\0");
-		if(*ctrl == '1')
+		if(*ctrl == '1')		//收到的首字节为0, 说明客户端请求登录
 		{
 			Dbutil* util = new Dbutil(NULL, 0);
 			if(util->user_login_verify(name, password) == 1)
@@ -280,7 +290,7 @@ void user_conection_sql(struct event* wev)
 		}
 
 
-		else if(*ctrl == '2')
+		else if(*ctrl == '2')		//收到的首字节为0, 说明客户端请求注册用户
 		{
 			Dbutil* util = new Dbutil(NULL, 0);
 			if(util->user_register(name, password) == 1)
@@ -293,7 +303,7 @@ void user_conection_sql(struct event* wev)
 			}
 			delete util;
 		}
-		else if(*ctrl == '3')
+		else if(*ctrl == '3')			//收到的首字节为0, 说明客户端请求删除用户
 		{
 			Dbutil* util = new Dbutil(NULL, 0);
 			if(util->user_delete(name, password) == 1)
@@ -306,7 +316,7 @@ void user_conection_sql(struct event* wev)
 			}
 			delete util;
 		}
-		else if(*ctrl == '0')
+		else if(*ctrl == '0')	//收到的首字节为0, 说明客户端退出
 		{
 			wev->status = 0;
 			eventdel(wev);

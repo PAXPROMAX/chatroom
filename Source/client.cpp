@@ -144,7 +144,7 @@ void* pthread_write(void* arg)
             else if(strcmp(buf, "register success") == 0)
             {
                 printf("register success\n");
-                set_ctrl_char(&ctrl);
+                set_ctrl_char(&ctrl);           //注册后需要设置ctrl, 不然会死循环
             }
             else if(strcmp(buf, "register fail") == 0)
             {

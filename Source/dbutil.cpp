@@ -116,7 +116,7 @@ bool Dbutil::user_login_verify(const char* name, const char* password)
     if(rows == 1)
     {
         row = mysql_fetch_row(result);
-        printf("user login success: id: %s, password: %s, access: %s\n", row[0], row[1], reset_password.c_str());
+        printf("user verify success: id: %s, password: %s, access: %s\n", row[0], row[1], reset_password.c_str());
         mysql_free_result(result);//释放结果集所占内存
         return true;
     }
@@ -126,7 +126,7 @@ bool Dbutil::user_login_verify(const char* name, const char* password)
     }
     else
     {
-        printf("user login fail: name: %s, password: %s\n", reset_name.c_str(), reset_password.c_str());
+        printf("user verify fail: name: %s, password: %s\n", reset_name.c_str(), reset_password.c_str());
     }
     mysql_free_result(result);//释放结果集所占内存
     return false;
@@ -136,7 +136,6 @@ bool Dbutil::user_register(const char *name, const char *password)
 {
     using namespace std;
     MYSQL_RES *result;
-    MYSQL_ROW row;
     unsigned int fields, rows;
     char buf[4096];
     string reset_name;
@@ -161,6 +160,40 @@ bool Dbutil::user_register(const char *name, const char *password)
     else
     {
         printf("user create err: name: %s, password: %s\n -sql: %s\n", reset_name.c_str(), reset_password.c_str(), buf);
+    }
+    mysql_free_result(result);//释放结果集所占内存
+    return false;
+}
+
+
+bool Dbutil::user_delete(const char *name, const char *password)
+{
+    using namespace std;
+    MYSQL_RES *result;
+    unsigned int fields, rows;
+    char buf[4096];
+    string reset_name;
+    string reset_password;
+
+
+    reset_name = reset_ESC(name);
+    reset_password = reset_ESC(password);
+    sprintf(buf, "delete from %s where name='%s' and password='%s';", this->table, reset_name.c_str(), reset_password.c_str());
+    if(mysql_query(mysql, buf) != 0)//执行查询语句
+    { 
+        printf("user delete err: %s\n", buf);
+        return false;
+    }
+    result = mysql_store_result(mysql);//获取结果集
+    if(result == NULL)
+    {
+        printf("user delete success: name: %s, password: %s", reset_name.c_str(), reset_password.c_str());
+        mysql_free_result(result);//释放结果集所占内存
+        return true;
+    }
+    else
+    {
+        printf("user delete err: name: %s, password: %s\n -sql: %s\n", reset_name.c_str(), reset_password.c_str(), buf);
     }
     mysql_free_result(result);//释放结果集所占内存
     return false;

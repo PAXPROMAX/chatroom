@@ -21,6 +21,7 @@ void user_menu()
     printf("*****************\n");
     printf("** 1.login     **\n");
     printf("** 2.register  **\n");
+    printf("** 3.delete    **\n");
     printf("** 0.exit      **\n");
     printf("*****************\n");
     return;
@@ -56,7 +57,7 @@ void user_input(char* buf, int size)
 	}
 }
 
-void user_operation(char* buf, int size, char* ctrl)
+int user_operation(char* buf, int size, char* ctrl)
 {
     char name[256], password[256];
     printf("input name: ");
@@ -64,14 +65,14 @@ void user_operation(char* buf, int size, char* ctrl)
     if(strcmp(name, "./exit") == 0)
     {
         set_ctrl_char(ctrl);
-        return;
+        return 0;
     }
     printf("input password: ");
     user_input(password, 256);
     if(strcmp(password, "./exit") == 0)
     {
         set_ctrl_char(ctrl);
-        return;
+        return 0;
     }
     if(*ctrl == '2')    //register == '2', other operation don't need comfirm
     {
@@ -81,12 +82,13 @@ void user_operation(char* buf, int size, char* ctrl)
         if(strcmp(comfirm, "./exit") == 0)
         {
             set_ctrl_char(ctrl);
-            return;
+            return -1;
         }
         if(strcmp(password, comfirm) != 0)
         {
-            printf("different password, regiser again\n");
-            return;
+            printf("different password, regiser fail\n");
+            set_ctrl_char(ctrl);
+            return -1;
         }
     }
     if(size > sizeof(name) + sizeof(password) + 2)
@@ -98,7 +100,7 @@ void user_operation(char* buf, int size, char* ctrl)
         printf("user ctrl fail: lenth of name and password is too long or buffer size is too small\n");
         exit(-1);
     }
-    return;
+    return 0;
 }
 
 void user_exit(int fd)
@@ -117,6 +119,7 @@ void* pthread_write(void* arg)
     int num, time, ret;
     while(1)
     {
+        memset(buf, 0,sizeof(buf));
         if(ctrl == '0')
         {
             send(fd, "0=0=0", sizeof("0=0=0"), 0);
@@ -124,11 +127,14 @@ void* pthread_write(void* arg)
         }
         else if(ctrl != '9')
         {
-            user_operation(buf, BUF_MAXSIZE, &ctrl);
+            while(user_operation(buf, BUF_MAXSIZE, &ctrl) == -1)
+            {
+                
+            }
             send(fd, buf, strlen(buf), 0);
+            printf("send: %s\n", buf);
             time = 6;
             num = 0;
-            memset(buf, 0,sizeof(buf));
             printf("set complete\n");
             num = recv(fd, buf, BUF_MAXSIZE, 0);
             fprintf(stdout, "strcmp: %d, buf: %s\n",strcmp(buf, "login success"), buf);
@@ -136,6 +142,7 @@ void* pthread_write(void* arg)
             {
                 ctrl = '9';
                 printf("login success\n");
+                continue;
             }
             else if(strcmp(buf, "login fail") == 0)
             {
@@ -150,7 +157,15 @@ void* pthread_write(void* arg)
             {
                 printf("register fail\n");
             }
-            continue;
+            else if(strcmp(buf, "delete success") == 0)
+            {
+                printf("delete success\n");
+            }
+            else if(strcmp(buf, "delete fail") == 0)
+            {
+                printf("delete fail\n");
+            }
+            set_ctrl_char(&ctrl);
         }
         else if(ctrl == '9')
         {
@@ -159,12 +174,14 @@ void* pthread_write(void* arg)
             if(strcmp(buf, "./exit") == 0) 
             {
                 ctrl = '8';
-                send(fd, buf, strlen(buf), 0);
+                send(fd, "./exit", strlen("./exit"), 0);
+                printf("send: %s\n", buf);
                 set_ctrl_char(&ctrl);
             }
             else
             {
                 send(fd, buf, sizeof(buf), 0);
+                printf("send: %s\n", buf);
             }
         }
     }
@@ -210,6 +227,7 @@ int main(int argc, char *argv[])
                 {
                     printf(">>>%s\n", buf);
                     printf("num = %d\n", num);
+                    printf("\n");
                     continue;
                 }
             }

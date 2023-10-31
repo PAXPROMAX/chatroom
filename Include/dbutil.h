@@ -72,4 +72,12 @@ public:
  * @return bool 成功为1, 失败为0
  */
     bool user_register(const char* name, const char* password);
+
+/**
+ * @brief 连接MySQL删除账号
+ * @param name          删除名称
+ * @param password      删除密码
+ * @return bool 成功为1, 失败为0
+ */
+    bool user_delete(const char* name, const char* password);
 };

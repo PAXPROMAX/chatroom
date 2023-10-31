@@ -23,7 +23,7 @@ int main(int argc, char* argv[])
 			{
 				e = (struct event*)events[i].data.ptr;
 				//e->func((void*)e);
-				threadpool_add(thp, process, (void*)e);
+				threadpool_add(thp, process, (void*)e);	//将任务加入线程池中
 			}
 		}
 	}

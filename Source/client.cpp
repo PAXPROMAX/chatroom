@@ -144,6 +144,7 @@ void* pthread_write(void* arg)
             else if(strcmp(buf, "register success") == 0)
             {
                 printf("register success\n");
+                set_ctrl_char(&ctrl);
             }
             else if(strcmp(buf, "register fail") == 0)
             {

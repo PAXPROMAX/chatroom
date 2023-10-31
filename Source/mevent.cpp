@@ -106,7 +106,6 @@ void event_read_cb(void* arg)
 
 void event_write(void *arg)
 {
-	printf("write cb\n");
 	struct event* wev;
 	int i, *epfd;
 	wev = (struct event*)arg;
@@ -209,7 +208,6 @@ void event_listen_cb(void* arg)
 			error_exit("client accept fail: ");
 		}
 	}
-	/*test*/
 	reset_epolloneshot(*epfd, lev);
 	printf("exit\n");
 	return;
@@ -218,11 +216,11 @@ void event_listen_cb(void* arg)
 //set an event
 void eventset(struct event* ev, int fd, void(*func)(void* arg),void* arg, int* epfd)
 {
+	struct epoll_event epev;
 	ev->fd = fd;
 	ev->func = func;
 	ev->arg = arg;
 	ev->num = strlen(ev->buf);
-	struct epoll_event epev;
 	epev.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
 	epev.data.ptr = ev;
 	epoll_ctl(*epfd, EPOLL_CTL_ADD, fd, &epev);

@@ -7,7 +7,7 @@
 #include<string.h>
 #include<fcntl.h>
 #include<errno.h>
-#define SERVIP "127.0.0.1"
+#define SERVIP "39.101.66.152"
 #define BUF_MAXSIZE 4096
 #define SERVPORT 9690
 char ctrl;
